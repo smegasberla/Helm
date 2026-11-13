@@ -1,0 +1,22 @@
+[package]
+name = "helm-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The graphical interface of Helm"
+
+[lib]
+name = "helm_gui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+helm-protocol.workspace = true
+helm-ipc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+log = "0.4"

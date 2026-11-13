@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Helm</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm0 2.2c1.6 0 3.4 2.3 3.9 5.8H8.1C8.6 7 10.4 4.7 12 4.7Zm-5.6 3.1c.7-.9 1.6-1.7 2.6-2.3-.8 1.3-1.3 2.8-1.6 4.4H4.6c.2-.8.5-1.5.8-2.1Zm11.2 0c1 .6 1.9 1.4 2.6 2.3.3.6.6 1.3.8 2.1h-2.8c-.3-1.6-.8-3.1-1.6-4.4ZM4.4 13.7h2.6c.2 1.7.7 3.2 1.4 4.4-1.5-.5-2.8-1.7-3.6-3.1a7 7 0 0 1-.4-1.3Zm4.4 0h6.4c-.5 3.5-2.3 5.8-3.2 5.8s-2.7-2.3-3.2-5.8Zm8.2 0h2.6a7 7 0 0 1-.4 1.3c-.8 1.4-2.1 2.6-3.6 3.1.7-1.2 1.2-2.7 1.4-4.4Zm.4-4.6h-2.8c-.3-1.6-.8-3.1-1.6-4.4 1.5.5 2.8 1.7 3.6 3.1.3.4.6.8.8 1.3Z"
+            />
+          </svg>
+          <div class="brand-text">
+            <h1>Helm</h1>
+            <p>Pick the system the next boot should use</p>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="helper-state" id="helper-state" data-state="unknown">
+            <span class="dot"></span>
+            <span id="helper-message">Looking for the helper&hellip;</span>
+          </div>
+          <button class="button" id="rescan" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="button-icon">
+              <path
+                d="M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z"
+                fill="currentColor"
+              />
+            </svg>
+            Rescan
+          </button>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="summary" id="summary" hidden>
+          <div class="summary-item">
+            <span class="summary-value" id="summary-disks">0</span>
+            <span class="summary-label">disks</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-value" id="summary-systems">0</span>
+            <span class="summary-label">systems</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-value" id="summary-entries">0</span>
+            <span class="summary-label">firmware entries</span>
+          </div>
+        </section>
+
+        <div class="os-grid" id="os-grid"></div>
+
+        <div class="placeholder" id="placeholder">
+          <div class="spinner" id="spinner"></div>
+          <p id="placeholder-text">Reading the disks of the machine&hellip;</p>
+        </div>
+
+        <div class="placeholder error" id="error-box" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="error-icon">
+            <path
+              d="M12 2 1 21h22L12 2Zm1 14h-2v2h2v-2Zm0-6h-2v5h2v-5Z"
+              fill="currentColor"
+            />
+          </svg>
+          <p id="error-text"></p>
+          <button class="button" id="retry" type="button">Try again</button>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <span id="footer-info"></span>
+      </footer>
+    </div>
+
+    <div class="modal-backdrop" id="modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <h2 id="modal-title">Boot another system</h2>
+        <p id="modal-body"></p>
+        <ul class="modal-details" id="modal-details"></ul>
+        <div class="modal-actions">
+          <button class="button" id="modal-cancel" type="button">Cancel</button>
+          <button class="button primary" id="modal-confirm" type="button">
+            Boot and reboot
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

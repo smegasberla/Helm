@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Helm",
+  "version": "0.1.0",
+  "identifier": "dev.helm.boot-switcher",
+  "build": {
+    "frontendDist": "../../ui"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Helm",
+        "width": 940,
+        "height": 680,
+        "minWidth": 720,
+        "minHeight": 520,
+        "resizable": true,
+        "center": true,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage", "msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png"
+    ],
+    "category": "Utility",
+    "shortDescription": "Switch the operating system of the next boot",
+    "longDescription": "Helm finds the operating systems that are installed on the disks of the machine and switches the firmware to another one on the next boot.",
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]
+      }
+    }
+  }
+}

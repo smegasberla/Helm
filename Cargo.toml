@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/helm-protocol",
+    "crates/helm-boot",
+    "crates/helm-detect",
+    "crates/helm-ipc",
+    "crates/helm-helper",
+    "crates/helm-gui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT"
+authors = ["Helm contributors"]
+repository = "https://example.invalid/helm"
+
+[workspace.dependencies]
+helm-protocol = { path = "crates/helm-protocol" }
+helm-detect = { path = "crates/helm-detect" }
+helm-boot = { path = "crates/helm-boot" }
+helm-ipc = { path = "crates/helm-ipc" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

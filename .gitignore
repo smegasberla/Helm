@@ -1,0 +1,11 @@
+# The build output of cargo.
+/target/
+**/target/
+
+# The files of the editors.
+/.vscode/
+.idea/
+*.swp
+
+# The bundles of the Tauri bundler.
+crates/helm-gui/gen/

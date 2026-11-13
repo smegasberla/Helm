@@ -1,0 +1,12 @@
+[package]
+name = "helm-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared wire protocol and data types for the Helm boot switcher"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

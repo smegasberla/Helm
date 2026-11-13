@@ -1,0 +1,39 @@
+[Unit]
+Description=Helm helper: finds the installed systems and switches the boot order
+Documentation=https://example.invalid/helm
+After=local-fs.target
+Before=graphical-session.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/helm-helper --serve
+Restart=on-failure
+RestartSec=2
+
+# The socket lives in a directory that only the helper and the members of
+# the "helm" group can reach.
+RuntimeDirectory=helm
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+
+# The helper needs the block devices and the firmware variables, nothing
+# else.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# CAP_SYS_BOOT    reboot the machine
+# CAP_DAC_READ_SEARCH  read the block devices
+# CAP_CHOWN       give the socket to the helm group
+# CAP_FOWNER      set the permissions of the socket
+CapabilityBoundingSet=CAP_SYS_BOOT CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER
+
+[Install]
+WantedBy=multi-user.target
