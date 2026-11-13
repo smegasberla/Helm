@@ -134,8 +134,8 @@ impl Gpt {
 /// Reasons why a device does not contain a usable GPT.
 #[derive(Debug, thiserror::Error)]
 pub enum GptError {
-    #[error("the device is too small to hold a partition table")]
-    TooSmall,
+    #[error("the device is too small to hold a partition table ({0} bytes)")]
+    TooSmall(u64),
     #[error("the device does not contain a protective MBR (not a GPT disk)")]
     NoProtectiveMbr,
     #[error("the GPT header signature is missing")]
@@ -163,7 +163,7 @@ pub fn has_protective_mbr(sector: &[u8]) -> bool {
 pub fn read_gpt(device: &dyn BlockDevice) -> Result<Gpt, GptError> {
     let size = device.size()?;
     if size < SECTOR_SIZE * 3 {
-        return Err(GptError::TooSmall);
+        return Err(GptError::TooSmall(size));
     }
 
     let first_sector = device.read_vec_at(0, 512)?;

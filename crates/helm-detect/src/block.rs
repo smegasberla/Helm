@@ -56,14 +56,102 @@ impl FileDevice {
     /// Open a device or image file.
     pub fn open<P: AsRef<std::path::Path>>(path: P) -> io::Result<Self> {
         let file = File::open(path)?;
-        let len = file.metadata()?.len();
+        let len = device_size(&file)?;
         Ok(Self { file, len })
     }
 
     /// Wrap an already opened file.
     pub fn from_file(file: File) -> io::Result<Self> {
-        let len = file.metadata()?.len();
+        let len = device_size(&file)?;
         Ok(Self { file, len })
+    }
+}
+
+/// The size of a device in bytes.
+///
+/// `stat()` reports a size of zero for a block device, so the size has to be
+/// asked from the kernel. Regular files (the disk images of the tests) keep
+/// their length.
+fn device_size(file: &File) -> io::Result<u64> {
+    platform::device_size(file).or_else(|_| file.metadata().map(|meta| meta.len()))
+}
+
+#[cfg(unix)]
+mod platform {
+    use std::fs::File;
+    use std::io;
+    use std::os::fd::AsRawFd;
+
+    /// `BLKGETSIZE64`, the size of a block device in bytes.
+    ///
+    /// The number is `_IOR(0x12, 114, size_t)` of the Linux headers.
+    const BLKGETSIZE64: libc::c_ulong = 0x8008_1272;
+
+    /// Ask the kernel for the size of a block device.
+    pub fn device_size(file: &File) -> io::Result<u64> {
+        let mut size: u64 = 0;
+        // SAFETY: the pointer points at a u64 that the kernel writes into.
+        let result = unsafe { libc::ioctl(file.as_raw_fd(), BLKGETSIZE64, &mut size) };
+        if result == 0 {
+            Ok(size)
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+}
+
+#[cfg(windows)]
+mod platform {
+    use std::ffi::c_void;
+    use std::fs::File;
+    use std::io;
+    use std::os::windows::io::AsRawHandle;
+    use std::ptr;
+
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::System::Ioctl::IOCTL_DISK_GET_LENGTH_INFO;
+    use windows_sys::Win32::System::IO::DeviceIoControl;
+
+    #[repr(C)]
+    struct DiskLengthInfo {
+        length: i64,
+    }
+
+    /// Ask the kernel for the size of a disk.
+    pub fn device_size(file: &File) -> io::Result<u64> {
+        let mut info = DiskLengthInfo { length: 0 };
+        let mut returned = 0u32;
+        // SAFETY: the buffer is large enough for the answer of the driver.
+        let ok = unsafe {
+            DeviceIoControl(
+                file.as_raw_handle() as HANDLE,
+                IOCTL_DISK_GET_LENGTH_INFO,
+                ptr::null(),
+                0,
+                &mut info as *mut _ as *mut c_void,
+                std::mem::size_of::<DiskLengthInfo>() as u32,
+                &mut returned,
+                ptr::null_mut(),
+            )
+        };
+        if ok == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(info.length as u64)
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+mod platform {
+    use std::fs::File;
+    use std::io;
+
+    /// The size of a device is not known on this platform.
+    pub fn device_size(_file: &File) -> io::Result<u64> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "the size of a device is not known on this platform",
+        ))
     }
 }
 
@@ -234,6 +322,15 @@ impl Write for DeviceCursor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_regular_file_keeps_its_length() {
+        let path = std::env::temp_dir().join(format!("helm-block-{}", std::process::id()));
+        std::fs::write(&path, vec![0u8; 4096]).unwrap();
+        let device = FileDevice::open(&path).unwrap();
+        assert_eq!(device.size().unwrap(), 4096);
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn slice_device_reads() {

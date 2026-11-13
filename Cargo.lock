@@ -1393,6 +1393,7 @@ dependencies = [
  "flate2",
  "helm-boot",
  "helm-protocol",
+ "libc",
  "log",
  "ntfs",
  "positioned-io",
