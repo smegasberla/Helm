@@ -52,7 +52,27 @@ fi
 
 echo "==> enabling the service"
 systemctl daemon-reload
-systemctl enable --now helm-helper.service
+systemctl enable helm-helper.service
+# A restart, and not "--now": an already running service keeps its old
+# configuration (and its old capabilities) otherwise.
+systemctl restart helm-helper.service
+
+# The socket belongs to the "helm" group so that the members of the group
+# can talk to the helper. The helper does this itself, but it needs the
+# CAP_CHOWN capability, so the installer makes sure of it as well.
+SOCKET="/run/helm/helper.sock"
+for _ in $(seq 1 50); do
+    [[ -S "${SOCKET}" ]] && break
+    sleep 0.1
+done
+if [[ -S "${SOCKET}" ]]; then
+    chown "root:${GROUP_NAME}" "${SOCKET}"
+    chmod 0660 "${SOCKET}"
+    echo "    ${SOCKET} belongs to root:${GROUP_NAME}"
+else
+    echo "    warning: ${SOCKET} was not created, look at 'journalctl -u helm-helper'" >&2
+fi
+
 systemctl status helm-helper.service --no-pager || true
 
 cat <<EOF
