@@ -15,7 +15,6 @@ mod server;
 mod service;
 
 use std::io::Write;
-use std::sync::Arc;
 
 use helm_ipc::{Connection, PeerCredentials};
 use helm_protocol::Response;
@@ -25,9 +24,17 @@ use server::HelperState;
 /// The version of the helper.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// What the helper is asked to do.
+enum Mode {
+    /// Serve the GUI over the socket.
+    Serve,
+    /// Run a detection once and print the report.
+    Detect,
+}
+
 struct Args {
     socket: String,
-    detect_only: bool,
+    mode: Mode,
     disks: Vec<String>,
     show_version: bool,
     show_help: bool,
@@ -38,7 +45,7 @@ struct Args {
 fn parse_args() -> Result<Args, String> {
     let mut args = Args {
         socket: helm_protocol::helper_socket_path(),
-        detect_only: false,
+        mode: Mode::Serve,
         disks: Vec::new(),
         show_version: false,
         show_help: false,
@@ -48,8 +55,8 @@ fn parse_args() -> Result<Args, String> {
     let mut iter = std::env::args().skip(1);
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--serve" => args.detect_only = false,
-            "--detect" => args.detect_only = true,
+            "--serve" => args.mode = Mode::Serve,
+            "--detect" => args.mode = Mode::Detect,
             "--install-service" => args.install_service = true,
             "--uninstall-service" => args.uninstall_service = true,
             "--version" | "-V" => args.show_version = true,
@@ -75,7 +82,7 @@ fn print_help() {
          \n\
          Options:\n  \
          --serve           Run the service that serves the GUI (the default)\n  \
-         --detect          Run a detection and print the report as JSON\n  \
+         --detect          Run a detection and print the report as JSON (exit 1 on warnings)\n  \
          --install-service Register the helper as a Windows service\n  \
          --uninstall-service Remove the Windows service\n  \
          --socket <path>   Use another socket than {}\n  \
@@ -120,29 +127,48 @@ fn main() {
         return;
     }
 
-    if args.detect_only {
-        run_detection(&args.disks);
-        return;
-    }
-
-    service::prepare();
-    if let Err(err) = run_server(&args.socket, &args.disks) {
-        eprintln!("helm-helper: {err}");
-        std::process::exit(1);
+    match args.mode {
+        Mode::Detect => {
+            if let Err(message) = run_detection(&args.disks) {
+                eprintln!("helm-helper: {message}");
+                std::process::exit(1);
+            }
+        }
+        Mode::Serve => {
+            service::prepare();
+            if let Err(err) = run_server(&args.socket, &args.disks) {
+                eprintln!("helm-helper: {err}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
 /// Run a detection and print the result.
-fn run_detection(disks: &[String]) {
+///
+/// The report is printed even when it contains warnings, so the caller can
+/// always parse it. The error return value means that the report is not
+/// complete, which lets the process end with a non zero exit code.
+fn run_detection(disks: &[String]) -> Result<(), String> {
     let state = HelperState::new();
     let report = if disks.is_empty() {
         helm_detect::detect(state.store.as_deref())
     } else {
-        helm_detect::detect_disks(disk_images(disks), state.store.as_deref())
+        helm_detect::detect_disks(disk_images(disks)?, state.store.as_deref())
     };
-    match serde_json::to_string_pretty(&report) {
-        Ok(json) => println!("{json}"),
-        Err(err) => eprintln!("helm-helper: cannot serialise the report: {err}"),
+    let json = serde_json::to_string_pretty(&report)
+        .map_err(|err| format!("cannot serialise the report: {err}"))?;
+    println!("{json}");
+    for warning in &report.warnings {
+        eprintln!("helm-helper: warning: {warning}");
+    }
+    if report.warnings.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "the detection finished with {} warning(s)",
+            report.warnings.len()
+        ))
     }
 }
 
@@ -210,24 +236,30 @@ fn uninstall_service() -> Result<(), String> {
 }
 
 /// Turn the given paths into a list of disks.
-fn disk_images(paths: &[String]) -> Vec<helm_detect::RawDisk> {
-    paths
-        .iter()
-        .filter_map(|path| {
-            let metadata = std::fs::metadata(path).ok()?;
-            Some(helm_detect::RawDisk {
-                path: path.clone(),
-                model: std::path::Path::new(path)
-                    .file_name()
-                    .map(|name| name.to_string_lossy().to_string())
-                    .unwrap_or_else(|| path.clone()),
-                serial: None,
-                size_bytes: metadata.len(),
-                sector_size: 512,
-                removable: false,
-            })
-        })
-        .collect()
+///
+/// A path that cannot be read is an error: dropping it silently would make
+/// the report look like an empty machine instead of a broken argument.
+fn disk_images(paths: &[String]) -> Result<Vec<helm_detect::RawDisk>, String> {
+    let mut disks = Vec::with_capacity(paths.len());
+    for path in paths {
+        let metadata = std::fs::metadata(path)
+            .map_err(|err| format!("cannot read the disk image {path}: {err}"))?;
+        if !metadata.is_file() {
+            return Err(format!("the disk image {path} is not a regular file"));
+        }
+        disks.push(helm_detect::RawDisk {
+            path: path.clone(),
+            model: std::path::Path::new(path)
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.clone()),
+            serial: None,
+            size_bytes: metadata.len(),
+            sector_size: 512,
+            removable: false,
+        });
+    }
+    Ok(disks)
 }
 
 /// The server loop.
@@ -238,7 +270,7 @@ fn run_server(socket: &str, disks: &[String]) -> std::io::Result<()> {
 
     let mut state = HelperState::new();
     if !disks.is_empty() {
-        state.disks = Some(disk_images(disks));
+        state.disks = Some(disk_images(disks).map_err(std::io::Error::other)?);
     }
     while !service::should_stop() {
         let mut connection = match listener.accept() {
@@ -285,7 +317,3 @@ fn serve(
     helm_ipc::send_frame(connection.as_mut(), &payload)?;
     connection.flush()
 }
-
-/// Keep the type of the shared state visible in the documentation.
-#[allow(dead_code)]
-type SharedState = Arc<HelperState>;

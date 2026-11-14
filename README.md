@@ -182,8 +182,8 @@ HELM_HELPER_SOCKET=/tmp/helm.sock helm-gui
 * The ext4 reader does not support `inline_data`, `meta_bg`, encryption or
   compression. A file that is stored inline cannot be read; the rest of the
   filesystem still is.
-* Btrfs and XFS are recognised, but their content is not read. A Linux
-  installation that lives on btrfs or XFS is therefore only found when the
-  firmware or the EFI System Partition point at its loader.
+* XFS is recognised, but its content is not read. A Linux installation that lives
+  on XFS is therefore only found when the firmware or the EFI System Partition
+  point at its loader.
 * macOS is not detected. The APFS container is a much bigger job than the
   other filesystems.

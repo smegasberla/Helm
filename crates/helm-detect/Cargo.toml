@@ -15,11 +15,10 @@ thiserror.workspace = true
 log = "0.4"
 ntfs = "0.4"
 fatfs = "0.3"
+ruzstd = "0.9"
+flate2 = "1"
 positioned-io = "0.2"
 byteorder = "1"
-
-[dev-dependencies]
-flate2 = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -31,3 +30,7 @@ windows-sys = { version = "0.60", features = [
     "Win32_System_Ioctl",
     "Win32_System_IO",
 ] }
+
+[dev-dependencies]
+flate2 = "1"
+zstd = "0.13"

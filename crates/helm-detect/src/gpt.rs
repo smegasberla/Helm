@@ -151,12 +151,15 @@ pub enum GptError {
 }
 
 /// True when the device starts with a protective MBR announcing a GPT.
+///
+/// The partition entry of the protective MBR starts at offset 446; its type
+/// is at offset 450 and is `0xEE`. The other fields of the entry (the CHS
+/// addresses) are usually `0xFF`, so only the type is looked at.
 pub fn has_protective_mbr(sector: &[u8]) -> bool {
     if sector.len() < 512 {
         return false;
     }
-    // The protective MBR uses partition type 0xEE for its single entry.
-    sector[450] == 0xEE && sector[451] == 0x00 && sector[452] == 0x00 && sector[453] == 0x00
+    sector[450] == 0xEE
 }
 
 /// Parse the GPT of a device.
@@ -424,6 +427,23 @@ mod tests {
         let device = SliceDevice::new(vec![0u8; 4096]);
         let err = read_gpt(&device).unwrap_err();
         assert!(matches!(err, GptError::NoProtectiveMbr));
+    }
+
+    #[test]
+    fn accepts_the_protective_mbr_of_a_real_disk() {
+        // The protective MBR that parted and the kernel write sets the type of
+        // the entry to 0xEE and fills the CHS end address with 0xFF, so only
+        // the type of the entry may be looked at.
+        let mut builder = Builder::new(2048);
+        builder.image[451..454].copy_from_slice(&[0xFF, 0xFF, 0xFF]);
+        let entries = entry(&esp_guid(), &esp_guid(), 2048, 614399, "EFI");
+        builder.write_header(1, 2, &entries, 2047);
+        let offset = (2 * SECTOR_SIZE) as usize;
+        builder.image[offset..offset + entries.len()].copy_from_slice(&entries);
+
+        let device = SliceDevice::new(builder.image);
+        let gpt = read_gpt(&device).expect("the protective MBR is valid");
+        assert_eq!(gpt.partitions.len(), 1);
     }
 
     #[test]

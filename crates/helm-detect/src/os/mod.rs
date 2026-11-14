@@ -34,7 +34,12 @@ pub struct LinuxProbe {
 impl LinuxProbe {
     /// True when the partition looks like a Linux installation.
     pub fn looks_like_linux(&self) -> bool {
-        self.has_etc || !self.kernels.is_empty()
+        self.has_etc || self.has_kernels()
+    }
+
+    /// True when the partition holds the kernel images.
+    pub fn has_kernels(&self) -> bool {
+        !self.kernels.is_empty()
     }
 
     /// True when the installation can be booted through UEFI.

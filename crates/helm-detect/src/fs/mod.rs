@@ -4,6 +4,7 @@
 //! raw partition, which keeps the helper free of mount side effects and lets
 //! it look at the partitions of an operating system it is not running.
 
+pub mod btrfs;
 pub mod ext4;
 pub mod fat;
 pub mod memory;
@@ -129,9 +130,9 @@ pub fn detect_filesystem(device: &dyn BlockDevice) -> FileSystemKind {
     if head.len() > 4 && &head[0..4] == b"XFSB" {
         return FileSystemKind::Xfs;
     }
-    // btrfs: the superblock lives at 64 KiB into the volume.
-    let area = read_up_to(device, 64 * 1024, 64);
-    if area.len() >= 8 && &area[0..8] == b"_BHRfS_M" {
+    // btrfs: the superblock lives at 64 KiB, the magic at 64 bytes inside it.
+    let area = read_up_to(device, 64 * 1024, 64 + 8);
+    if area.len() >= 64 + 8 && &area[64..64 + 8] == b"_BHRfS_M" {
         return FileSystemKind::Btrfs;
     }
     FileSystemKind::Unknown
@@ -166,6 +167,7 @@ pub fn open_filesystem(
             Ok(Box::new(ext4::Ext4Volume::open(device)?))
         }
         FileSystemKind::Ntfs => Ok(Box::new(ntfs::NtfsVolume::open(device)?)),
+        FileSystemKind::Btrfs => Ok(Box::new(btrfs::BtrfsVolume::open(device)?)),
         other => Err(FsError::Unsupported(format!(
             "no reader for {other:?} filesystems"
         ))),
