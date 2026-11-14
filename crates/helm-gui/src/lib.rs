@@ -104,6 +104,30 @@ fn boot_next() -> Result<serde_json::Value, String> {
     helper::request_data(&Request::GetBootNext)
 }
 
+/// The gaming profile of this machine, without starting anything.
+#[tauri::command]
+fn vm_plan() -> Result<serde_json::Value, String> {
+    helper::request_data(&Request::VmPlan)
+}
+
+/// Hand the dedicated card to a Windows guest and start it.
+#[tauri::command]
+fn vm_start() -> Result<serde_json::Value, String> {
+    helper::request_data(&Request::VmStart)
+}
+
+/// Stop the guest and give the card back to the host.
+#[tauri::command]
+fn vm_stop() -> Result<serde_json::Value, String> {
+    helper::request_data(&Request::VmStop)
+}
+
+/// Whether a guest is running.
+#[tauri::command]
+fn vm_status() -> Result<serde_json::Value, String> {
+    helper::request_data(&Request::VmStatus)
+}
+
 /// Run the interface.
 pub fn run() {
     tauri::Builder::default()
@@ -112,7 +136,11 @@ pub fn run() {
             detect_oses,
             set_boot_next,
             reboot,
-            boot_next
+            boot_next,
+            vm_plan,
+            vm_start,
+            vm_stop,
+            vm_status
         ])
         .run(tauri::generate_context!())
         .expect("the interface could not be started");

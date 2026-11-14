@@ -1430,6 +1430,7 @@ dependencies = [
  "helm-detect",
  "helm-ipc",
  "helm-protocol",
+ "helm-vm",
  "libc",
  "log",
  "serde",
@@ -1452,6 +1453,18 @@ dependencies = [
 name = "helm-protocol"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "helm-vm"
+version = "0.1.0"
+dependencies = [
+ "helm-protocol",
+ "libc",
+ "log",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

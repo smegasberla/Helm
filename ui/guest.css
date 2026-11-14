@@ -1,0 +1,76 @@
+/* The guest strip.
+ *
+ * It sits under the two panes because it describes a different thing: not
+ * which system the machine boots into, but whether the dedicated card is
+ * currently handed to a virtual machine. Keeping it out of the panes means the
+ * boot switch stays readable even when a guest is running.
+ */
+
+.guest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex: none;
+  padding: 11px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.guest[data-state="running"] {
+  border-top-color: var(--signal);
+}
+
+.guest[data-state="blocked"] {
+  border-top-color: var(--danger);
+}
+
+.guest-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.guest-state {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.guest[data-state="ready"] .guest-state {
+  color: var(--ok);
+}
+
+.guest[data-state="running"] .guest-state {
+  color: var(--signal);
+}
+
+.guest[data-state="blocked"] .guest-state {
+  color: var(--danger);
+}
+
+.guest-detail {
+  margin: 0;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.guest-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .guest {
+    flex-wrap: wrap;
+  }
+}

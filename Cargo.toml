@@ -6,6 +6,7 @@ members = [
     "crates/helm-detect",
     "crates/helm-ipc",
     "crates/helm-helper",
+    "crates/helm-vm",
     "crates/helm-gui",
 ]
 
@@ -22,6 +23,7 @@ helm-protocol = { path = "crates/helm-protocol" }
 helm-detect = { path = "crates/helm-detect" }
 helm-boot = { path = "crates/helm-boot" }
 helm-ipc = { path = "crates/helm-ipc" }
+helm-vm = { path = "crates/helm-vm" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

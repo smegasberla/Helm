@@ -11,6 +11,7 @@ helm-protocol.workspace = true
 helm-detect.workspace = true
 helm-boot.workspace = true
 helm-ipc.workspace = true
+helm-vm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

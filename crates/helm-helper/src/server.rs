@@ -2,6 +2,7 @@
 
 use helm_boot::{BootSwitcher, FirmwareStore};
 use helm_ipc::PeerCredentials;
+use helm_vm::{Plan, Session};
 use helm_protocol::{DetectionReport as Report, HelperCapabilities, HelperInfo, Request, Response};
 
 use crate::auth::{authorize, RequestKind};
@@ -17,6 +18,8 @@ pub struct HelperState {
     pub uefi: bool,
     /// The disks to look at. When it is empty the real disks are used.
     pub disks: Option<Vec<helm_detect::RawDisk>>,
+    /// The guest of the gaming profile, when one is running.
+    pub session: Option<Session>,
 }
 
 impl HelperState {
@@ -26,6 +29,7 @@ impl HelperState {
             store: helm_boot::platform_store(),
             uefi: helm_boot::running_under_uefi(),
             disks: None,
+            session: None,
         }
     }
 
@@ -60,7 +64,8 @@ pub fn capabilities(state: &HelperState) -> HelperCapabilities {
 pub fn handle(request: Request, state: &mut HelperState, peer: &PeerCredentials) -> Response {
     let kind = match request {
         Request::Ping | Request::Detect | Request::GetBootNext => RequestKind::Detect,
-        Request::SetBootNext { .. } => RequestKind::Switch,
+        Request::VmPlan | Request::VmStatus => RequestKind::Detect,
+        Request::SetBootNext { .. } | Request::VmStart | Request::VmStop => RequestKind::Switch,
         Request::Reboot => RequestKind::Reboot,
     };
     if let Err(message) = authorize(peer, kind) {
@@ -136,6 +141,49 @@ pub fn handle(request: Request, state: &mut HelperState, peer: &PeerCredentials)
         Request::Reboot => match helm_boot::reboot::reboot() {
             Ok(()) => Response::ok(serde_json::json!({ "rebooting": true })),
             Err(err) => Response::error(err.to_string(), Some("reboot_failed")),
+        },
+        Request::VmPlan => {
+            let plan = Plan::detect();
+            Response::ok(serde_json::json!({
+                "profile": plan.profile,
+                "command": plan.render(),
+                "problems": plan.problems,
+                "gpu": plan.gpu.map(|gpu| serde_json::json!({
+                    "address": gpu.address,
+                    "vendor_device": gpu.vendor_device,
+                    "iommu_group": gpu.iommu_group,
+                    "isolated": gpu.is_isolated(),
+                    "driver": gpu.driver,
+                })),
+            }))
+        }
+        Request::VmStart => {
+            if state.session.as_mut().map(Session::is_running).unwrap_or(false) {
+                return Response::error("a guest is already running", Some("already_running"));
+            }
+            state.session = None;
+            match Session::start(Plan::detect()) {
+                Ok(session) => {
+                    let pid = session.pid();
+                    state.session = Some(session);
+                    Response::ok(serde_json::json!({ "pid": pid }))
+                }
+                Err(err) => Response::error(err.to_string(), Some("vm_failed")),
+            }
+        }
+        Request::VmStop => match state.session.take() {
+            Some(mut session) => match session.stop() {
+                Ok(()) => Response::ok(serde_json::json!({ "stopped": true })),
+                Err(err) => Response::error(err.to_string(), Some("vm_failed")),
+            },
+            None => Response::ok(serde_json::json!({ "stopped": false })),
+        },
+        Request::VmStatus => {
+            let running = state.session.as_mut().map(Session::is_running).unwrap_or(false);
+            Response::ok(serde_json::json!({
+                "running": running,
+                "pid": state.session.as_ref().map(Session::pid),
+            }))
         },
     }
 }

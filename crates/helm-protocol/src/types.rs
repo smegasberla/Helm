@@ -212,6 +212,14 @@ pub enum Request {
     Reboot,
     /// Return the currently pending `BootNext` value, if any.
     GetBootNext,
+    /// Describe the gaming profile of this machine without starting it.
+    VmPlan,
+    /// Hand the dedicated card to a guest and start it.
+    VmStart,
+    /// Stop the guest and give the card back to the host.
+    VmStop,
+    /// Report whether a guest is running.
+    VmStatus,
 }
 
 /// A response sent from the helper back to the GUI.

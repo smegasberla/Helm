@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Helm</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="guest.css" />
   </head>
   <body>
     <div class="shell">
@@ -109,9 +110,26 @@
         </section>
       </main>
 
+      <footer class="guest" id="guest" data-state="unknown" aria-label="Guest profile">
+        <div class="guest-copy">
+          <span class="eyebrow">Guest profile</span>
+          <span class="guest-state" id="guest-state">Not checked</span>
+          <p class="guest-detail" id="guest-detail">
+            Reading the gaming profile of this machine&hellip;
+          </p>
+        </div>
+        <div class="guest-actions">
+          <button class="btn btn-signal" id="guest-start" type="button" disabled>
+            Start Windows
+          </button>
+          <button class="btn" id="guest-stop" type="button" disabled>Stop</button>
+        </div>
+      </footer>
+
     </div>
 
 
     <script src="app.js"></script>
+    <script src="vm.js"></script>
   </body>
 </html>
