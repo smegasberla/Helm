@@ -1413,6 +1413,7 @@ version = "0.1.0"
 dependencies = [
  "helm-ipc",
  "helm-protocol",
+ "libc",
  "log",
  "serde",
  "serde_json",
