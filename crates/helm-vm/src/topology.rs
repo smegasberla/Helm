@@ -84,7 +84,11 @@ fn read_cpu_list(path: &str) -> Option<Vec<u32>> {
 /// Parse one kernel cpulist.
 pub fn parse_cpu_list(raw: &str) -> Result<Vec<u32>, String> {
     let mut cpus = Vec::new();
-    for item in raw.split(',').map(str::trim).filter(|item| !item.is_empty()) {
+    for item in raw
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+    {
         match item.split_once('-') {
             Some((first, last)) => {
                 let first: u32 = first
@@ -101,8 +105,7 @@ pub fn parse_cpu_list(raw: &str) -> Result<Vec<u32>, String> {
                 cpus.extend(first..=last);
             }
             None => cpus.push(
-                item
-                    .parse()
+                item.parse()
                     .map_err(|_| format!("not a cpu number: {item}"))?,
             ),
         }

@@ -190,8 +190,7 @@ pub fn preflight(profile: &Profile) -> Vec<String> {
         Err(err) => problems.push(err.to_string()),
     }
 
-    if profile.display == Display::LookingGlass && !std::path::Path::new("/dev/kvmfr0").exists()
-    {
+    if profile.display == Display::LookingGlass && !std::path::Path::new("/dev/kvmfr0").exists() {
         problems.push(
             "/dev/kvmfr0 is missing: install looking-glass-module-dkms, load the kvmfr module and \
              start the Looking Glass client to see the guest in a window (the HDMI output still \

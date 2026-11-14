@@ -109,8 +109,8 @@ impl Session {
 
         vfio::bind(&plan.profile.gpu).map_err(|err| StartError::Vfio(err.to_string()))?;
 
-        let mut child = spawn(&plan.command, plan.profile.guest_affinity.as_deref())
-            .map_err(StartError::Io)?;
+        let mut child =
+            spawn(&plan.command, plan.profile.guest_affinity.as_deref()).map_err(StartError::Io)?;
 
         // A guest that exits at once is the usual outcome of a card that never
         // made it to vfio-pci or a disk QEMU refuses. Reporting it here keeps the
@@ -233,8 +233,6 @@ pub enum StartError {
     #[error("the guest could not be started: {0}")]
     Io(#[from] std::io::Error),
 }
-
-
 
 #[cfg(test)]
 mod tests {
