@@ -38,6 +38,11 @@ pub enum VfioError {
     SharedGroup(String, String, usize),
     #[error("{0}")]
     Io(String),
+    #[error(
+        "the card is still in use by {0}; close every program that has it open before handing \
+         it over"
+    )]
+    InUse(String),
 }
 
 /// The identity and the isolation of one PCI function.
@@ -135,6 +140,89 @@ pub fn current_driver(address: &str) -> Option<String> {
         })
 }
 
+/// The nodes one function owns under `/dev/dri`.
+fn device_nodes(address: &str) -> Vec<String> {
+    let drm = format!("/sys/bus/pci/devices/{address}/drm");
+    let mut nodes: Vec<String> = std::fs::read_dir(drm)
+        .map(|entries| {
+            entries
+                .filter_map(|entry| entry.ok())
+                .map(|entry| format!("/dev/dri/{}", entry.file_name().to_string_lossy()))
+                .collect()
+        })
+        .unwrap_or_default();
+    nodes.sort();
+    nodes
+}
+
+/// The per-GPU nodes of the module: `/dev/nvidia0` and its siblings.
+fn per_gpu_nodes() -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir("/dev") else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .filter(|name| {
+            name.strip_prefix("nvidia")
+                .map(|index| {
+                    !index.is_empty() && index.chars().all(|character| character.is_ascii_digit())
+                })
+                .unwrap_or(false)
+        })
+        .map(|name| format!("/dev/{name}"))
+        .collect()
+}
+
+/// The processes that hold the card open right now, as `pid name -> node`.
+///
+/// A vendor driver must not be unbound while userspace still has the card's
+/// nodes open: the teardown removes a device that is in use, and the NVIDIA
+/// module answers with an oops that also takes the session down and leaves the
+/// card driverless until the next boot. Proving that nobody holds the card is
+/// therefore the first thing a hand-over does.
+///
+/// The control node `/dev/nvidiactl` is deliberately not part of the set: the
+/// whole session keeps it open, so it would forbid the hand-over outright
+/// instead of pointing at the program that actually holds this card.
+pub fn holders(address: &str) -> Vec<String> {
+    let mut nodes = device_nodes(address);
+    nodes.extend(per_gpu_nodes());
+    if nodes.is_empty() {
+        return Vec::new();
+    }
+
+    let mut holders = Vec::new();
+    let Ok(processes) = std::fs::read_dir("/proc") else {
+        return holders;
+    };
+    for process in processes.filter_map(|entry| entry.ok()) {
+        let pid = process.file_name().to_string_lossy().to_string();
+        if !pid.chars().all(|character| character.is_ascii_digit()) {
+            continue;
+        }
+        let Ok(fds) = std::fs::read_dir(process.path().join("fd")) else {
+            continue;
+        };
+        for fd in fds.filter_map(|entry| entry.ok()) {
+            let Ok(target) = std::fs::read_link(fd.path()) else {
+                continue;
+            };
+            let target = target.to_string_lossy();
+            if !nodes.iter().any(|node| node.as_str() == target.as_ref()) {
+                continue;
+            }
+            let name = std::fs::read_to_string(process.path().join("comm"))
+                .map(|text| text.trim().to_string())
+                .unwrap_or_default();
+            holders.push(format!("{pid} {name} -> {target}"));
+        }
+    }
+    holders.sort();
+    holders.dedup();
+    holders
+}
+
 /// Take the function away from `vfio-pci` and give it back to `driver`.
 ///
 /// This runs after the guest is gone: the host needs its card back, otherwise
@@ -208,6 +296,13 @@ pub fn bind(address: &str) -> Result<(), VfioError> {
         }
     }
 
+    // Unbinding a card that userspace still holds is exactly what turns a
+    // hand-over into an oops, so the hand-over stops here instead.
+    let in_use = holders(address);
+    if !in_use.is_empty() {
+        return Err(VfioError::InUse(in_use.join(", ")));
+    }
+
     if let Some(driver) = function.driver {
         write(&format!("/sys/bus/pci/drivers/{driver}/unbind"), address)?;
     }
@@ -253,6 +348,11 @@ mod tests {
         };
         assert!(function.is_isolated());
         assert!(!function.is_bound_to_vfio());
+    }
+
+    #[test]
+    fn a_function_without_nodes_has_no_holders() {
+        assert!(holders("0000:99:00.0").is_empty());
     }
 
     #[test]
