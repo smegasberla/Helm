@@ -365,8 +365,10 @@ mod tests {
     fn a_function_without_nodes_has_no_holders() {
         // The machine may or may not have the module loaded; either way an
         // address that owns no node may not be reported as held by anyone.
+        // The module-wide nodes still count, because a session that holds them
+        // is what makes any hand-over unsafe.
         for holder in holders("0000:99:00.0") {
-            assert!(holder.contains("/dev/nvidiactl"), "{holder}");
+            assert!(holder.contains("/dev/nvidia"), "{holder}");
         }
     }
 

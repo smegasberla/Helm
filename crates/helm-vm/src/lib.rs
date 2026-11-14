@@ -77,6 +77,9 @@ impl Plan {
 pub struct Session {
     /// The plan the session was started from.
     pub plan: Plan,
+    /// True when the card already belonged to `vfio-pci` before the guest was
+    /// started, which is what the dedicated boot entry produces.
+    bound_at_boot: bool,
     child: std::process::Child,
 }
 
@@ -107,6 +110,13 @@ impl Session {
                 .map_err(StartError::Io)?;
         }
 
+        // A card that the boot itself reserved for `vfio-pci` was never owned by
+        // a host driver, so there is nothing to unbind and nothing to give back.
+        // Recording it here keeps the way out of the session from handing a
+        // guest-owned card back to a driver that no longer manages it.
+        let bound_at_boot = vfio::current_driver(&plan.profile.gpu).as_deref()
+            == Some(vfio::VFIO_DRIVER);
+
         vfio::bind(&plan.profile.gpu).map_err(|err| StartError::Vfio(err.to_string()))?;
 
         let mut child =
@@ -118,18 +128,24 @@ impl Session {
         // the card back on the way out.
         std::thread::sleep(std::time::Duration::from_millis(1500));
         if let Ok(Some(status)) = child.try_wait() {
-            let driver = plan
-                .released_driver()
-                .unwrap_or(vfio::HOST_DRIVER)
-                .to_string();
-            let _ = vfio::release(&plan.profile.gpu, &driver);
+            if !bound_at_boot {
+                let driver = plan
+                    .released_driver()
+                    .unwrap_or(vfio::HOST_DRIVER)
+                    .to_string();
+                let _ = vfio::release(&plan.profile.gpu, &driver);
+            }
             return Err(StartError::Io(std::io::Error::other(format!(
                 "the guest exited at once ({status}): {}",
                 log_tail()
             ))));
         }
 
-        Ok(Self { plan, child })
+        Ok(Self {
+            plan,
+            bound_at_boot,
+            child,
+        })
     }
 
     /// The process id of the guest.
@@ -150,6 +166,13 @@ impl Session {
             .and_then(|()| self.child.wait())
             .map(|_| ())
             .map_err(StartError::Io);
+
+        if self.bound_at_boot {
+            // The card has to stay on `vfio-pci` for the rest of this boot: the
+            // whole point of the dedicated entry is that no hand-over, and no
+            // unbind that could wedge the driver core, ever happens.
+            return stopped;
+        }
 
         let driver = self
             .plan
