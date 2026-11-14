@@ -16,24 +16,32 @@ RuntimeDirectory=helm
 RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes
 
-# The helper needs the block devices and the firmware variables, nothing
-# else.
+# The helper needs the block devices, the firmware variables and, for the
+# gaming profile, the PCI function it hands to the guest. Handing one over is
+# a write into the kernel's device tree, so the two protections that forbid
+# exactly that are dropped; nothing else is loosened.
 NoNewPrivileges=yes
+# The guest keeps its own firmware variable store under here.
+StateDirectory=helm
+StateDirectoryMode=0750
+# QEMU needs /dev/kvm, which belongs to the kvm group.
+SupplementaryGroups=kvm
 PrivateTmp=yes
 ProtectHome=yes
 ProtectControlGroups=yes
-ProtectKernelModules=yes
-ProtectKernelTunables=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
-# CAP_SYS_BOOT    reboot the machine
-# CAP_DAC_READ_SEARCH  read the block devices
-# CAP_CHOWN       give the socket to the helm group
-# CAP_FOWNER      set the permissions of the socket
-CapabilityBoundingSet=CAP_SYS_BOOT CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER
+# CAP_SYS_BOOT        reboot the machine
+# CAP_DAC_READ_SEARCH read the block devices
+# CAP_CHOWN           give the socket to the helm group
+# CAP_FOWNER          set the permissions of the socket
+# CAP_SYS_MODULE      load vfio-pci for the guest
+# CAP_DAC_OVERRIDE    write the driver override of a PCI function
+# CAP_KILL            stop a guest that outlived its supervisor
+CapabilityBoundingSet=CAP_SYS_BOOT CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER CAP_SYS_MODULE CAP_DAC_OVERRIDE CAP_KILL
 
 [Install]
 WantedBy=multi-user.target
