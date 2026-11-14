@@ -109,8 +109,25 @@ impl Session {
 
         vfio::bind(&plan.profile.gpu).map_err(|err| StartError::Vfio(err.to_string()))?;
 
-        let child = spawn(&plan.command, plan.profile.guest_affinity.as_deref())
+        let mut child = spawn(&plan.command, plan.profile.guest_affinity.as_deref())
             .map_err(StartError::Io)?;
+
+        // A guest that exits at once is the usual outcome of a card that never
+        // made it to vfio-pci or a disk QEMU refuses. Reporting it here keeps the
+        // interface from announcing a session that is already gone, and gives
+        // the card back on the way out.
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        if let Ok(Some(status)) = child.try_wait() {
+            let driver = plan
+                .released_driver()
+                .unwrap_or(vfio::HOST_DRIVER)
+                .to_string();
+            let _ = vfio::release(&plan.profile.gpu, &driver);
+            return Err(StartError::Io(std::io::Error::other(format!(
+                "the guest exited at once ({status}): {}",
+                log_tail()
+            ))));
+        }
 
         Ok(Self { plan, child })
     }
@@ -164,6 +181,12 @@ impl Drop for Session {
 /// creates its own threads: a thread started outside the mask would put the
 /// guest's work back onto the cores the host is supposed to keep.
 fn spawn(command: &qemu::Command, affinity: Option<&str>) -> std::io::Result<std::process::Child> {
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(qemu::Command::log_path())?;
+    let errors = log.try_clone()?;
+
     let mut process = match affinity.filter(|list| !list.is_empty()) {
         Some(list) => {
             let mut process = std::process::Command::new("taskset");
@@ -180,7 +203,24 @@ fn spawn(command: &qemu::Command, affinity: Option<&str>) -> std::io::Result<std
             process
         }
     };
-    process.spawn()
+    // QEMU explains a refusal on its stderr; without the log a launch that failed
+    // is indistinguishable from one that is merely slow.
+    process
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::from(log))
+        .stderr(std::process::Stdio::from(errors))
+        .spawn()
+}
+
+/// The last lines QEMU wrote, used to explain a launch that died at once.
+fn log_tail() -> String {
+    let text = std::fs::read_to_string(qemu::Command::log_path()).unwrap_or_default();
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim_end)
+        .filter(|line| !line.is_empty())
+        .collect();
+    lines[lines.len().saturating_sub(6)..].join(" | ")
 }
 
 /// Everything that can go wrong between a plan and a running guest.

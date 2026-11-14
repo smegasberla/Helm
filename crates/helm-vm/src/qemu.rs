@@ -133,13 +133,11 @@ pub fn build(profile: &Profile) -> Command {
         }
     }
 
-    // Pinning is done by the supervisor, which knows the cores it left to the
-    // host; the plan only carries the IO thread so that the disk backend never
-    // competes with the guest for the same vCPU.
-    args.push("-object".into());
-    args.push("iothread,id=io".into());
-    args.push("-device".into());
-    args.push("virtio-blk-pci,drive=windows,iothread=io".into());
+    // The disk stays on the AHCI controller that was declared above. A second
+    // controller for the same drive id makes QEMU refuse to start ("Drive
+    // 'windows' is already in use by another device"), and virtio-blk is not an
+    // option anyway: the guest is a native Windows installation, whose only
+    // storage driver is the one for the emulated AHCI chipset.
 
     Command {
         program: QEMU_BINARY.to_string(),

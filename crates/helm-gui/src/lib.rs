@@ -5,6 +5,8 @@
 
 mod helper;
 
+use std::sync::Mutex;
+
 use helm_protocol::{DetectionReport, HelperInfo, Request};
 use serde::Serialize;
 
@@ -110,16 +112,55 @@ fn vm_plan() -> Result<serde_json::Value, String> {
     helper::request_data(&Request::VmPlan)
 }
 
+/// The window that shows the guest, when one is open.
+static GLASS: Mutex<Option<std::process::Child>> = Mutex::new(None);
+
+/// Open the window of the guest.
+///
+/// The window belongs to the session of the user, so this side has to start it:
+/// the helper runs as a service, with no access to the display server. A guest
+/// without this window is a guest that runs, but cannot be seen or used.
+fn open_window() -> Result<(), String> {
+    let mut slot = GLASS.lock().map_err(|err| err.to_string())?;
+    if let Some(child) = slot.as_mut() {
+        if matches!(child.try_wait(), Ok(None)) {
+            return Ok(());
+        }
+    }
+    let child = std::process::Command::new("looking-glass-client")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|err| format!("the guest runs, but looking-glass-client could not be started: {err}"))?;
+    *slot = Some(child);
+    Ok(())
+}
+
+/// Close the window of the guest, if it is open.
+fn close_window() {
+    if let Ok(mut slot) = GLASS.lock() {
+        if let Some(mut child) = slot.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 /// Hand the dedicated card to a Windows guest and start it.
 #[tauri::command]
 fn vm_start() -> Result<serde_json::Value, String> {
-    helper::request_data(&Request::VmStart)
+    let data = helper::request_data(&Request::VmStart)?;
+    open_window()?;
+    Ok(data)
 }
 
 /// Stop the guest and give the card back to the host.
 #[tauri::command]
 fn vm_stop() -> Result<serde_json::Value, String> {
-    helper::request_data(&Request::VmStop)
+    let data = helper::request_data(&Request::VmStop);
+    close_window();
+    data
 }
 
 /// Whether a guest is running.

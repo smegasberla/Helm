@@ -19,6 +19,9 @@ pub const VFIO_DRIVER: &str = "vfio-pci";
 /// only the fallback for a card nothing owned at plan time.
 pub const HOST_DRIVER: &str = "nvidia";
 
+/// How often giving a function back to its host driver is attempted.
+const RETRIES: u32 = 5;
+
 /// What can go wrong while taking a card away from the host.
 #[derive(Debug, thiserror::Error)]
 pub enum VfioError {
@@ -150,7 +153,24 @@ pub fn release(address: &str, driver: &str) -> Result<(), VfioError> {
         &format!("/sys/bus/pci/devices/{address}/driver_override"),
         "\n",
     );
-    write(&format!("/sys/bus/pci/drivers/{driver}/bind"), address)
+
+    // A card that has just left a guest is still in its runtime suspended state,
+    // and the NVIDIA driver refuses that first bind. Retrying is what keeps the
+    // card from staying driverless (and prime-run and CUDA with it) until the
+    // next reboot.
+    let mut last = None;
+    for attempt in 0..RETRIES {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(150 * u64::from(attempt)));
+        }
+        match write(&format!("/sys/bus/pci/drivers/{driver}/bind"), address) {
+            Ok(()) => return Ok(()),
+            Err(err) => last = Some(err),
+        }
+    }
+    Err(last.unwrap_or_else(|| {
+        VfioError::Io(format!("{address} could not be given back to {driver}"))
+    }))
 }
 
 /// Give the function to `vfio-pci`.
