@@ -27,7 +27,9 @@ const RETRIES: u32 = 5;
 pub enum VfioError {
     #[error("the PCI function {0} does not exist on this machine")]
     Missing(String),
-    #[error("the IOMMU is not enabled: add intel_iommu=on (or amd_iommu=on) to the kernel command line")]
+    #[error(
+        "the IOMMU is not enabled: add intel_iommu=on (or amd_iommu=on) to the kernel command line"
+    )]
     NoIommu,
     #[error("the PCI function {0} has no IOMMU group, so it cannot be isolated")]
     NoGroup(String),
@@ -182,12 +184,19 @@ fn per_gpu_nodes() -> Vec<String> {
 /// card driverless until the next boot. Proving that nobody holds the card is
 /// therefore the first thing a hand-over does.
 ///
-/// The control node `/dev/nvidiactl` is deliberately not part of the set: the
-/// whole session keeps it open, so it would forbid the hand-over outright
-/// instead of pointing at the program that actually holds this card.
+/// The control node `/dev/nvidiactl` is part of the set: the module opens it
+/// for the whole graphical session, and the teardown of a device that a client
+/// still talks to through it is the very oops this check exists to prevent. A
+/// session that holds it therefore has to be ended — or the card bound to
+/// `vfio-pci` at boot — before the hand-over can be attempted.
 pub fn holders(address: &str) -> Vec<String> {
     let mut nodes = device_nodes(address);
     nodes.extend(per_gpu_nodes());
+    if let Ok(control) = std::fs::read_link("/dev/nvidiactl") {
+        nodes.push(control.to_string_lossy().to_string());
+    } else if std::path::Path::new("/dev/nvidiactl").exists() {
+        nodes.push("/dev/nvidiactl".to_string());
+    }
     if nodes.is_empty() {
         return Vec::new();
     }
@@ -233,7 +242,10 @@ pub fn release(address: &str, driver: &str) -> Result<(), VfioError> {
         return Ok(());
     }
     if current_driver(address).as_deref() == Some(VFIO_DRIVER) {
-        write(&format!("/sys/bus/pci/drivers/{VFIO_DRIVER}/unbind"), address)?;
+        write(
+            &format!("/sys/bus/pci/drivers/{VFIO_DRIVER}/unbind"),
+            address,
+        )?;
     }
     // The override has to be dropped before the original driver can claim the
     // device again; leaving it behind is what makes a card vanish after one run.
@@ -256,9 +268,8 @@ pub fn release(address: &str, driver: &str) -> Result<(), VfioError> {
             Err(err) => last = Some(err),
         }
     }
-    Err(last.unwrap_or_else(|| {
-        VfioError::Io(format!("{address} could not be given back to {driver}"))
-    }))
+    Err(last
+        .unwrap_or_else(|| VfioError::Io(format!("{address} could not be given back to {driver}"))))
 }
 
 /// Give the function to `vfio-pci`.
@@ -352,7 +363,11 @@ mod tests {
 
     #[test]
     fn a_function_without_nodes_has_no_holders() {
-        assert!(holders("0000:99:00.0").is_empty());
+        // The machine may or may not have the module loaded; either way an
+        // address that owns no node may not be reported as held by anyone.
+        for holder in holders("0000:99:00.0") {
+            assert!(holder.contains("/dev/nvidiactl"), "{holder}");
+        }
     }
 
     #[test]
