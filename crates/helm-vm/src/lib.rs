@@ -101,8 +101,10 @@ impl Session {
         if !std::path::Path::new(profile::OVMF_VARS).exists() {
             // The guest needs its own copy of the variable store; sharing the
             // host's would let a Windows installer rewrite the host's boot
-            // entries.
-            std::fs::copy(profile::OVMF_CODE, profile::OVMF_VARS).map_err(StartError::Io)?;
+            // entries. The copy is made from the empty template, not from the
+            // firmware image, which carries no writable store of its own.
+            std::fs::copy(profile::OVMF_VARS_TEMPLATE, profile::OVMF_VARS)
+                .map_err(StartError::Io)?;
         }
 
         vfio::bind(&plan.profile.gpu).map_err(|err| StartError::Vfio(err.to_string()))?;

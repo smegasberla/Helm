@@ -18,6 +18,12 @@ pub const OVMF_VARS: &str = "/var/lib/helm/ovmf_vars.fd";
 /// The shared firmware image the guest starts from.
 pub const OVMF_CODE: &str = "/usr/share/edk2/x64/OVMF_CODE.4m.fd";
 
+/// The empty variable store the guest's copy is made from.
+///
+/// The image above is the executable part; it cannot be used as a variable
+/// store, so the guest gets a real copy of this template instead.
+pub const OVMF_VARS_TEMPLATE: &str = "/usr/share/edk2/x64/OVMF_VARS.4m.fd";
+
 /// The partition the Windows installation lives on.
 pub const DEFAULT_WINDOWS_DISK: &str = "/dev/nvme0n1p3";
 
